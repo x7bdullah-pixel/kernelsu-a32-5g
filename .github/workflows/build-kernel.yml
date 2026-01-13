@@ -1,5 +1,4 @@
 name: Build KernelSU Kernel for Samsung A32 5G
-
 on:
   workflow_dispatch:
 
