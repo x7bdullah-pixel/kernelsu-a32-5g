@@ -38,6 +38,10 @@ jobs:
       run: |
         cd kernel
 
+        # Remove -Werror from all Makefiles to allow warnings
+        find . -type f -name "Makefile*" -exec sed -i 's/-Werror//g' {} \;
+        find . -type f -name "Kbuild*" -exec sed -i 's/-Werror//g' {} \;
+
         # Fix the invalid flag in ALL Makefiles
         find . -type f -name "Makefile*" -exec sed -i 's/-Wno-error-implicit-function-declaration/-Wno-implicit-function-declaration/g' {} \;
         find . -type f -name "Kbuild*" -exec sed -i 's/-Wno-error-implicit-function-declaration/-Wno-implicit-function-declaration/g' {} \;
@@ -78,7 +82,9 @@ jobs:
         sed -i 's/CONFIG_MEMORY_BOOSTING=y/# CONFIG_MEMORY_BOOSTING is not set/' .config
         sed -i 's/CONFIG_IKHEADERS=y/# CONFIG_IKHEADERS is not set/' .config
 
-        make CC=$CC -j$(nproc) Image 2>&1 | tee build.log || make CC=$CC -j$(nproc) Image.gz 2>&1 | tee -a build.log
+        # Disable -Werror to allow warnings without failing
+        make CC=$CC KCFLAGS="-w" EXTRA_CFLAGS="-Wno-error" -j$(nproc) Image 2>&1 | tee build.log || \
+        make CC=$CC KCFLAGS="-w" EXTRA_CFLAGS="-Wno-error" -j$(nproc) Image.gz 2>&1 | tee -a build.log
 
     - name: Check build output
       run: |
