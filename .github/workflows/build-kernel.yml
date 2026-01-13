@@ -4,7 +4,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     defaults:
       run:
         shell: bash
@@ -13,15 +13,14 @@ jobs:
     - name: Setup build environment
       run: |
         sudo apt-get update
-        sudo apt-get install -y git curl wget bc bison flex libssl-dev libelf-dev zip unzip python3 python-is-python3 libncurses-dev make gcc g++ cpio gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+        sudo apt-get install -y git curl wget bc bison flex libssl-dev libelf-dev zip unzip python3 python-is-python3 libncurses-dev make cpio
 
-        # Fix /bin/sh to use bash instead of dash
+        # Install GCC-9 cross compiler (older GCC for kernel 4.14)
+        sudo apt-get install -y gcc-9-aarch64-linux-gnu g++-9-aarch64-linux-gnu
+
+        # Fix /bin/sh to use bash
         sudo rm /bin/sh
         sudo ln -s /bin/bash /bin/sh
-
-        # Verify
-        echo "Shell is now:"
-        file /bin/sh
 
     - name: Clone kernel source
       run: |
@@ -33,79 +32,54 @@ jobs:
       run: |
         cd kernel
         curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
-
-        # Add KernelSU config and disable stack protector
         echo "CONFIG_KSU=y" >> arch/arm64/configs/a32x_defconfig
-
-        # Disable stack protector in defconfig
-        sed -i '/CONFIG_CC_STACKPROTECTOR/d' arch/arm64/configs/a32x_defconfig
-        echo "# CONFIG_CC_STACKPROTECTOR is not set" >> arch/arm64/configs/a32x_defconfig
-        echo "# CONFIG_CC_STACKPROTECTOR_STRONG is not set" >> arch/arm64/configs/a32x_defconfig
 
     - name: Build kernel
       run: |
         cd kernel
 
-        # Set environment
+        # Use GCC-9
         export ARCH=arm64
         export SUBARCH=arm64
-        export CROSS_COMPILE=aarch64-linux-gnu-
-        export CC=aarch64-linux-gnu-gcc
-        export LD=aarch64-linux-gnu-ld
-        export AR=aarch64-linux-gnu-ar
-        export NM=aarch64-linux-gnu-nm
-        export OBJCOPY=aarch64-linux-gnu-objcopy
-        export OBJDUMP=aarch64-linux-gnu-objdump
-        export STRIP=aarch64-linux-gnu-strip
+        export CROSS_COMPILE=aarch64-linux-gnu-gcc-9
+        export CC=aarch64-linux-gnu-gcc-9
+        export HOSTCC=gcc
+        export HOSTCXX=g++
 
-        echo "Compiler version:"
+        # Disable warnings-as-errors for newer GCC compatibility
+        export KCFLAGS="-Wno-error=array-compare -Wno-error=maybe-uninitialized -Wno-error=misleading-indentation"
+
+        echo "Compiler:"
         $CC --version
 
-        # Generate defconfig (in-tree build)
         make a32x_defconfig
 
-        # Force disable stack protector in .config
-        sed -i 's/CONFIG_CC_STACKPROTECTOR=y/# CONFIG_CC_STACKPROTECTOR is not set/' .config
+        # Disable stack protector
         sed -i 's/CONFIG_CC_STACKPROTECTOR_STRONG=y/# CONFIG_CC_STACKPROTECTOR_STRONG is not set/' .config
-        sed -i 's/CONFIG_CC_STACKPROTECTOR_REGULAR=y/# CONFIG_CC_STACKPROTECTOR_REGULAR is not set/' .config
+        sed -i 's/CONFIG_CC_STACKPROTECTOR=y/# CONFIG_CC_STACKPROTECTOR is not set/' .config
 
-        echo "Stack protector config after sed:"
-        grep -i stackprotector .config || echo "None found"
+        # Disable -Werror in Makefile
+        sed -i 's/-Werror/-Wno-error/g' Makefile
 
-        # Build kernel image
-        make -j$(nproc) Image 2>&1 | tee build.log || true
-
-        # Check if Image was built
-        if [ ! -f arch/arm64/boot/Image ]; then
-          echo "Image not found, trying Image.gz..."
-          make -j$(nproc) Image.gz 2>&1 | tee -a build.log || true
-        fi
+        make -j$(nproc) Image 2>&1 | tee build.log || make -j$(nproc) Image.gz 2>&1 | tee -a build.log
 
     - name: Check build output
       run: |
-        echo "=== Build output ==="
-        ls -la kernel/arch/arm64/boot/ 2>/dev/null || echo "No boot directory found"
-        echo ""
-        echo "=== Last 150 lines of build log ==="
-        tail -150 kernel/build.log 2>/dev/null || echo "No build log"
+        ls -la kernel/arch/arm64/boot/ 2>/dev/null || echo "No boot dir"
+        tail -100 kernel/build.log 2>/dev/null || echo "No log"
 
     - name: Package kernel
       run: |
         mkdir -p out
-
         if [ -f kernel/arch/arm64/boot/Image ]; then
           cp kernel/arch/arm64/boot/Image out/
         elif [ -f kernel/arch/arm64/boot/Image.gz ]; then
           cp kernel/arch/arm64/boot/Image.gz out/
         else
-          echo "ERROR: No kernel image found!"
-          find kernel -name "Image*" -type f 2>/dev/null
+          echo "ERROR: No kernel image!"
           exit 1
         fi
-
-        cd out
-        zip -r KernelSU-A32-5G-kernel.zip *
-        ls -la
+        cd out && zip -r KernelSU-A32-5G-kernel.zip * && ls -la
 
     - name: Upload kernel
       uses: actions/upload-artifact@v4
