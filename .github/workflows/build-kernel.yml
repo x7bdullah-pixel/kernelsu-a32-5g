@@ -30,25 +30,23 @@ jobs:
         curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
         echo "CONFIG_KSU=y" >> arch/arm64/configs/a32x_defconfig
 
-    - name: Fix Makefiles for GCC 13
+    - name: Fix Makefiles and source for GCC 13
       run: |
         cd kernel
 
-        # Fix the invalid flag in ALL Makefiles BEFORE building
-        echo "Fixing -Wno-error-implicit-function-declaration flag..."
+        # Fix the invalid flag in ALL Makefiles
         find . -type f -name "Makefile*" -exec sed -i 's/-Wno-error-implicit-function-declaration/-Wno-implicit-function-declaration/g' {} \;
         find . -type f -name "Kbuild*" -exec sed -i 's/-Wno-error-implicit-function-declaration/-Wno-implicit-function-declaration/g' {} \;
 
-        # Also check Kconfig files
-        find . -type f -name "Kconfig*" -exec sed -i 's/-Wno-error-implicit-function-declaration/-Wno-implicit-function-declaration/g' {} \;
+        # Fix need_memory_boosting - comment out the extern declaration and the call
+        sed -i 's/extern inline bool need_memory_boosting/\/\/ extern inline bool need_memory_boosting/' include/linux/mm.h
+        sed -i 's/if (!need_memory_boosting(NULL))/if (0) \/\/ disabled need_memory_boosting/' mm/page_alloc.c
 
-        # Show where the flag exists
-        echo "Checking if flag still exists:"
-        grep -r "Wno-error-implicit-function-declaration" . 2>/dev/null | head -20 || echo "Flag not found (good!)"
+        # Fix ksm_flock - comment out extern declaration
+        sed -i 's/inline void ksm_flock/\/\/ inline void ksm_flock/' include/linux/keyslot-manager.h
+        sed -i 's/ksm_flock(ksm, flags);/\/\/ ksm_flock(ksm, flags); \/\/ disabled/' block/blk-crypto.c
 
-        # Fix need_memory_boosting - replace extern declaration with static inline definition
-        sed -i 's/extern inline bool need_memory_boosting(struct pglist_data \*pgdat);/static inline bool need_memory_boosting(struct pglist_data *pgdat) { return false; }/' include/linux/mm.h
-        echo "Fixed need_memory_boosting in mm.h"
+        echo "Source fixes applied"
 
     - name: Build kernel
       run: |
@@ -68,11 +66,9 @@ jobs:
 
         make a32x_defconfig
 
-        # Disable stack protector
+        # Disable problematic configs
         sed -i 's/CONFIG_CC_STACKPROTECTOR_STRONG=y/# CONFIG_CC_STACKPROTECTOR_STRONG is not set/' .config
         sed -i 's/CONFIG_CC_STACKPROTECTOR=y/# CONFIG_CC_STACKPROTECTOR is not set/' .config
-
-        # Disable Samsung-specific features that cause build issues
         sed -i 's/CONFIG_MEMORY_BOOSTING=y/# CONFIG_MEMORY_BOOSTING is not set/' .config
         sed -i 's/CONFIG_IKHEADERS=y/# CONFIG_IKHEADERS is not set/' .config
 
