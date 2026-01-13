@@ -38,13 +38,19 @@ jobs:
       run: |
         cd kernel
 
-        # Remove -Werror from all Makefiles to allow warnings
-        find . -type f -name "Makefile*" -exec sed -i 's/-Werror//g' {} \;
-        find . -type f -name "Kbuild*" -exec sed -i 's/-Werror//g' {} \;
+        # Fix -Werror flags properly:
+        # 1. Remove standalone -Werror
+        find . -type f \( -name "Makefile*" -o -name "Kbuild*" \) -exec sed -i 's/ -Werror / /g' {} \;
+        find . -type f \( -name "Makefile*" -o -name "Kbuild*" \) -exec sed -i 's/ -Werror$//g' {} \;
 
-        # Fix the invalid flag in ALL Makefiles
-        find . -type f -name "Makefile*" -exec sed -i 's/-Wno-error-implicit-function-declaration/-Wno-implicit-function-declaration/g' {} \;
-        find . -type f -name "Kbuild*" -exec sed -i 's/-Wno-error-implicit-function-declaration/-Wno-implicit-function-declaration/g' {} \;
+        # 2. Convert -Werror=X to -WX (remove error part)
+        find . -type f \( -name "Makefile*" -o -name "Kbuild*" \) -exec sed -i 's/-Werror=/-W/g' {} \;
+
+        # 3. Convert -Wno-error=X to -Wno-X
+        find . -type f \( -name "Makefile*" -o -name "Kbuild*" \) -exec sed -i 's/-Wno-error=/-Wno-/g' {} \;
+
+        # 4. Fix the old invalid flag format
+        find . -type f \( -name "Makefile*" -o -name "Kbuild*" \) -exec sed -i 's/-Wno-error-implicit-function-declaration/-Wno-implicit-function-declaration/g' {} \;
 
         # Fix need_memory_boosting - comment out the extern declaration and the call
         sed -i 's/extern inline bool need_memory_boosting/\/\/ extern inline bool need_memory_boosting/' include/linux/mm.h
