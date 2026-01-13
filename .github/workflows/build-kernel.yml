@@ -64,6 +64,12 @@ jobs:
         sed -i '/clkdbg-mt6853/d' drivers/clk/mediatek/Makefile
         sed -i '/cpuidle-mediatek/d' drivers/cpuidle/Makefile
 
+        # Disable Samsung DEFEX (missing defex_caches.h)
+        sed -i '/defex_lsm/d' security/samsung/Makefile || true
+
+        # Fix SDCARDFS_VERSION macro issue
+        sed -i 's/SDCARDFS_VERSION/"2.0"/g' fs/sdcardfs/main.c || true
+
         echo "Source fixes applied"
 
     - name: Build kernel
