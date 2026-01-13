@@ -63,14 +63,14 @@ jobs:
         export ARCH=arm64
         export SUBARCH=arm64
         export CROSS_COMPILE=aarch64-linux-gnu-
+        export CC=aarch64-linux-gnu-gcc
 
         echo "Compiler version:"
-        aarch64-linux-gnu-gcc --version
+        $CC --version
         echo "Shell check:"
-        echo $SHELL
         /bin/sh --version || true
 
-        make a32x_defconfig
+        make CC=$CC a32x_defconfig
 
         # Disable problematic configs
         sed -i 's/CONFIG_CC_STACKPROTECTOR_STRONG=y/# CONFIG_CC_STACKPROTECTOR_STRONG is not set/' .config
@@ -78,7 +78,7 @@ jobs:
         sed -i 's/CONFIG_MEMORY_BOOSTING=y/# CONFIG_MEMORY_BOOSTING is not set/' .config
         sed -i 's/CONFIG_IKHEADERS=y/# CONFIG_IKHEADERS is not set/' .config
 
-        make -j$(nproc) Image 2>&1 | tee build.log || make -j$(nproc) Image.gz 2>&1 | tee -a build.log
+        make CC=$CC -j$(nproc) Image 2>&1 | tee build.log || make CC=$CC -j$(nproc) Image.gz 2>&1 | tee -a build.log
 
     - name: Check build output
       run: |
