@@ -67,6 +67,13 @@ jobs:
         # Disable Samsung DEFEX (missing defex_caches.h)
         sed -i '/defex_lsm/d' security/samsung/Makefile || true
 
+        # Disable Samsung FIVE security (missing five_tee_interface.h)
+        sed -i '/five/d' security/samsung/Makefile || true
+
+        # Disable MediaTek DVFSRC (missing helio-dvfsrc-qos.h)
+        sed -i '/helio-dvfsrc/d' drivers/devfreq/Makefile || true
+        rm -rf drivers/devfreq/helio-dvfsrc-v3 || true
+
         # Fix SDCARDFS_VERSION macro issue
         sed -i 's/SDCARDFS_VERSION/"2.0"/g' fs/sdcardfs/main.c || true
 
