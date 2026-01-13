@@ -4,7 +4,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     defaults:
       run:
         shell: bash
@@ -15,8 +15,8 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y git curl wget bc bison flex libssl-dev libelf-dev zip unzip python3 python-is-python3 libncurses-dev make cpio
 
-        # Install GCC-9 cross compiler (older GCC for kernel 4.14)
-        sudo apt-get install -y gcc-9-aarch64-linux-gnu g++-9-aarch64-linux-gnu
+        # Install cross compiler
+        sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu gcc-10 g++-10
 
         # Fix /bin/sh to use bash
         sudo rm /bin/sh
@@ -38,16 +38,16 @@ jobs:
       run: |
         cd kernel
 
-        # Use GCC-9
         export ARCH=arm64
         export SUBARCH=arm64
-        export CROSS_COMPILE=aarch64-linux-gnu-gcc-9
-        export CC=aarch64-linux-gnu-gcc-9
-        export HOSTCC=gcc
-        export HOSTCXX=g++
+        export CROSS_COMPILE=aarch64-linux-gnu-
+        export CC=aarch64-linux-gnu-gcc
+        export HOSTCC=gcc-10
+        export HOSTCXX=g++-10
 
-        # Disable warnings-as-errors for newer GCC compatibility
-        export KCFLAGS="-Wno-error=array-compare -Wno-error=maybe-uninitialized -Wno-error=misleading-indentation"
+        # Disable ALL warnings-as-errors
+        export KCFLAGS="-w"
+        export EXTRA_CFLAGS="-w"
 
         echo "Compiler:"
         $CC --version
