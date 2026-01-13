@@ -46,9 +46,9 @@ jobs:
         sed -i 's/inline void ksm_flock/\/\/ inline void ksm_flock/' include/linux/keyslot-manager.h
         sed -i 's/ksm_flock(ksm, flags);/\/\/ ksm_flock(ksm, flags); \/\/ disabled/' block/blk-crypto.c
 
-        # Fix missing clk-mux.h header - create empty stub
-        touch drivers/clk/mediatek/clk-mux.h
-        echo "// Stub header" > drivers/clk/mediatek/clk-mux.h
+        # Disable problematic MediaTek clock debug driver (missing header dependencies)
+        sed -i 's/obj-$(CONFIG_COMMON_CLK_MT6853) += clkdbg-mt6853.o/# obj-$(CONFIG_COMMON_CLK_MT6853) += clkdbg-mt6853.o/' drivers/clk/mediatek/Makefile
+        sed -i 's/obj-y += clkdbg-mt6853.o/# obj-y += clkdbg-mt6853.o/' drivers/clk/mediatek/Makefile
 
         echo "Source fixes applied"
 
