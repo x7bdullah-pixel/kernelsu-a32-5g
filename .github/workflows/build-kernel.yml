@@ -93,6 +93,9 @@ jobs:
         sed -i 's/CONFIG_CC_STACKPROTECTOR=y/# CONFIG_CC_STACKPROTECTOR is not set/' .config
         sed -i 's/CONFIG_MEMORY_BOOSTING=y/# CONFIG_MEMORY_BOOSTING is not set/' .config
         sed -i 's/CONFIG_IKHEADERS=y/# CONFIG_IKHEADERS is not set/' .config
+        # Disable Samsung DEFEX (missing headers)
+        sed -i 's/CONFIG_DEFEX=y/# CONFIG_DEFEX is not set/' .config
+        sed -i 's/CONFIG_SECURITY_DEFEX=y/# CONFIG_SECURITY_DEFEX is not set/' .config
 
         # Disable -Werror to allow warnings without failing
         make CC=$CC KCFLAGS="-w" EXTRA_CFLAGS="-Wno-error" -j$(nproc) Image 2>&1 | tee build.log || \
