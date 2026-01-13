@@ -10,7 +10,22 @@ jobs:
     - name: Setup build environment
       run: |
         sudo apt-get update
-        sudo apt-get install -y git curl wget bc bison flex libssl-dev libelf-dev zip unzip python3 libncurses-dev gcc-aarch64-linux-gnu
+        sudo apt-get install -y git curl wget bc bison flex libssl-dev libelf-dev zip unzip python3 libncurses-dev make gcc g++ cpio
+
+        # Fix /bin/sh to use bash instead of dash (Samsung kernel needs bash)
+        sudo ln -sf /bin/bash /bin/sh
+
+    - name: Download toolchain
+      run: |
+        mkdir -p toolchain
+        cd toolchain
+
+        # Use eva-gcc which is known to work with Samsung kernels
+        wget -q https://github.com/AmazingDef/toolchains/releases/download/eva-gcc-12/aarch64-elf-gcc.tar.xz || \
+        wget -q https://github.com/AmazingDef/toolchains/releases/download/gcc-12/aarch64-linux-gnu.tar.xz
+
+        tar -xf *.tar.xz || tar -xJf *.tar.xz
+        rm -f *.tar.xz
 
     - name: Clone kernel source
       run: |
@@ -23,36 +38,78 @@ jobs:
         cd kernel
         curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
 
-        # Add KernelSU config and disable problematic options
+        # Add KernelSU config
         echo "CONFIG_KSU=y" >> arch/arm64/configs/a32x_defconfig
-        sed -i 's/CONFIG_CC_STACKPROTECTOR_STRONG=y/# CONFIG_CC_STACKPROTECTOR_STRONG is not set/' arch/arm64/configs/a32x_defconfig
-        sed -i 's/CONFIG_CC_STACKPROTECTOR=y/# CONFIG_CC_STACKPROTECTOR is not set/' arch/arm64/configs/a32x_defconfig
 
     - name: Build kernel
       run: |
         cd kernel
+
+        # Find toolchain
+        TOOLCHAIN_PATH=$(find $GITHUB_WORKSPACE/toolchain -name "aarch64-*-gcc" -type f | head -1 | xargs dirname)
+        if [ -z "$TOOLCHAIN_PATH" ]; then
+          TOOLCHAIN_PATH=$(find $GITHUB_WORKSPACE/toolchain -type d -name "bin" | head -1)
+        fi
+
+        export PATH="$TOOLCHAIN_PATH:$PATH"
         export ARCH=arm64
         export SUBARCH=arm64
-        export CROSS_COMPILE=aarch64-linux-gnu-
 
-        make a32x_defconfig
+        # Detect cross compile prefix
+        if [ -f "$TOOLCHAIN_PATH/aarch64-elf-gcc" ]; then
+          export CROSS_COMPILE=aarch64-elf-
+        elif [ -f "$TOOLCHAIN_PATH/aarch64-linux-gnu-gcc" ]; then
+          export CROSS_COMPILE=aarch64-linux-gnu-
+        else
+          export CROSS_COMPILE=aarch64-linux-android-
+        fi
 
-        # Disable stack protector in .config too
-        sed -i 's/CONFIG_CC_STACKPROTECTOR_STRONG=y/# CONFIG_CC_STACKPROTECTOR_STRONG is not set/' .config
-        sed -i 's/CONFIG_CC_STACKPROTECTOR=y/# CONFIG_CC_STACKPROTECTOR is not set/' .config
+        echo "Using toolchain from: $TOOLCHAIN_PATH"
+        echo "Cross compile: $CROSS_COMPILE"
+        ${CROSS_COMPILE}gcc --version || echo "GCC not found in path"
 
-        make -j$(nproc) Image 2>&1 || make -j$(nproc) Image.gz 2>&1
+        # Generate defconfig
+        make O=out a32x_defconfig
+
+        # Build
+        make O=out -j$(nproc) Image 2>&1 | tee build.log || true
+
+        # Check if Image was built
+        if [ ! -f out/arch/arm64/boot/Image ]; then
+          echo "Image not found, trying Image.gz..."
+          make O=out -j$(nproc) Image.gz 2>&1 | tee -a build.log || true
+        fi
 
     - name: Check build output
       run: |
-        ls -la kernel/arch/arm64/boot/
+        echo "=== Build output ==="
+        ls -la kernel/out/arch/arm64/boot/ 2>/dev/null || ls -la kernel/arch/arm64/boot/ 2>/dev/null || echo "No boot directory found"
+        echo ""
+        echo "=== Last 50 lines of build log ==="
+        tail -50 kernel/build.log 2>/dev/null || echo "No build log"
 
     - name: Package kernel
       run: |
         mkdir -p out
-        cp kernel/arch/arm64/boot/Image out/ 2>/dev/null || cp kernel/arch/arm64/boot/Image.gz out/
+
+        # Try different output locations
+        if [ -f kernel/out/arch/arm64/boot/Image ]; then
+          cp kernel/out/arch/arm64/boot/Image out/
+        elif [ -f kernel/out/arch/arm64/boot/Image.gz ]; then
+          cp kernel/out/arch/arm64/boot/Image.gz out/
+        elif [ -f kernel/arch/arm64/boot/Image ]; then
+          cp kernel/arch/arm64/boot/Image out/
+        elif [ -f kernel/arch/arm64/boot/Image.gz ]; then
+          cp kernel/arch/arm64/boot/Image.gz out/
+        else
+          echo "ERROR: No kernel image found!"
+          find kernel -name "Image*" -type f 2>/dev/null
+          exit 1
+        fi
+
         cd out
         zip -r KernelSU-A32-5G-kernel.zip *
+        ls -la
 
     - name: Upload kernel
       uses: actions/upload-artifact@v4
