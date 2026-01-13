@@ -47,8 +47,9 @@ jobs:
         sed -i 's/ksm_flock(ksm, flags);/\/\/ ksm_flock(ksm, flags); \/\/ disabled/' block/blk-crypto.c
 
         # Disable problematic MediaTek clock debug driver (missing header dependencies)
-        sed -i 's/obj-$(CONFIG_COMMON_CLK_MT6853) += clkdbg-mt6853.o/# obj-$(CONFIG_COMMON_CLK_MT6853) += clkdbg-mt6853.o/' drivers/clk/mediatek/Makefile
-        sed -i 's/obj-y += clkdbg-mt6853.o/# obj-y += clkdbg-mt6853.o/' drivers/clk/mediatek/Makefile
+        sed -i '/clkdbg-mt6853/d' drivers/clk/mediatek/Makefile
+        echo "Removed clkdbg-mt6853 from Makefile"
+        grep -n "clkdbg" drivers/clk/mediatek/Makefile || echo "clkdbg entries removed"
 
         echo "Source fixes applied"
 
