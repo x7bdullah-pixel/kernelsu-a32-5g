@@ -15,11 +15,10 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y git curl wget bc bison flex libssl-dev libelf-dev zip unzip python3 python-is-python3 libncurses-dev make cpio gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 
-        # Replace dash with bash system-wide
-        echo "dash dash/sh boolean false" | sudo debconf-set-selections
-        sudo DEBIAN_FRONTEND=noninteractive dpkg-reconfigure dash
+        # Force replace dash with bash
+        sudo ln -sf /bin/bash /bin/sh
 
-        # Verify bash is now /bin/sh
+        # Verify
         ls -la /bin/sh
         /bin/sh --version
 
