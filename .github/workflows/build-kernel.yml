@@ -5,6 +5,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
 
     steps:
     - name: Setup build environment
@@ -13,7 +16,9 @@ jobs:
         sudo apt-get install -y git curl wget bc bison flex libssl-dev libelf-dev zip unzip python3 python-is-python3 libncurses-dev make gcc g++ cpio gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
 
         # Fix /bin/sh to use bash instead of dash (Samsung kernel needs bash)
-        sudo ln -sf /bin/bash /bin/sh
+        sudo rm /bin/sh
+        sudo ln -s /bin/bash /bin/sh
+        ls -la /bin/sh
 
     - name: Clone kernel source
       run: |
@@ -26,8 +31,13 @@ jobs:
         cd kernel
         curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
 
-        # Add KernelSU config
-        echo "CONFIG_KSU=y" >> arch/arm64/configs/a32x_defconfig
+        # Add KernelSU config and disable stack protector
+        cat >> arch/arm64/configs/a32x_defconfig << 'EOF'
+        CONFIG_KSU=y
+        # CONFIG_CC_STACKPROTECTOR is not set
+        # CONFIG_CC_STACKPROTECTOR_STRONG is not set
+        # CONFIG_CC_STACKPROTECTOR_REGULAR is not set
+        EOF
 
     - name: Build kernel
       run: |
@@ -37,11 +47,26 @@ jobs:
         export SUBARCH=arm64
         export CROSS_COMPILE=aarch64-linux-gnu-
 
+        echo "Shell check:"
+        ls -la /bin/sh
+        file /bin/sh
+
         echo "Using cross compiler: $(which aarch64-linux-gnu-gcc)"
         aarch64-linux-gnu-gcc --version
 
         # Generate defconfig
         make O=out a32x_defconfig
+
+        # Force disable stack protector in .config
+        sed -i 's/CONFIG_CC_STACKPROTECTOR=y/# CONFIG_CC_STACKPROTECTOR is not set/' out/.config
+        sed -i 's/CONFIG_CC_STACKPROTECTOR_STRONG=y/# CONFIG_CC_STACKPROTECTOR_STRONG is not set/' out/.config
+        sed -i 's/CONFIG_CC_STACKPROTECTOR_REGULAR=y/# CONFIG_CC_STACKPROTECTOR_REGULAR is not set/' out/.config
+
+        # Also add if not present
+        grep -q "CONFIG_CC_STACKPROTECTOR" out/.config || echo "# CONFIG_CC_STACKPROTECTOR is not set" >> out/.config
+
+        echo "Stack protector config:"
+        grep -i stackprotector out/.config || echo "No stackprotector config found"
 
         # Build kernel image
         make O=out -j$(nproc) Image 2>&1 | tee build.log || true
