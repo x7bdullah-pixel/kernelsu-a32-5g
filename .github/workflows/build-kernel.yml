@@ -38,6 +38,12 @@ jobs:
       run: |
         cd kernel
 
+        # CRITICAL: Force bash as the shell in the kernel's top-level Makefile
+        sed -i '1a SHELL := /bin/bash' Makefile
+
+        # Also ensure all scripts use bash
+        find . -type f -name "*.sh" -exec sed -i 's|#!/bin/sh|#!/bin/bash|g' {} \; 2>/dev/null || true
+
         # Fix -Werror flags properly:
         # 1. Remove standalone -Werror
         find . -type f \( -name "Makefile*" -o -name "Kbuild*" \) -exec sed -i 's/ -Werror / /g' {} \;
@@ -74,6 +80,10 @@ jobs:
         sed -i '/helio-dvfsrc/d' drivers/devfreq/Makefile || true
         rm -rf drivers/devfreq/helio-dvfsrc-v3 || true
 
+        # Disable MediaTek extcon (missing extcon_usb.h)
+        sed -i '/mediatek/d' drivers/extcon/Makefile || true
+        rm -rf drivers/extcon/mediatek || true
+
         # Fix SDCARDFS_VERSION macro issue
         sed -i 's/SDCARDFS_VERSION/"2.0"/g' fs/sdcardfs/main.c || true
 
@@ -83,17 +93,23 @@ jobs:
       run: |
         cd kernel
 
+        # Set all required environment variables
         export ARCH=arm64
         export SUBARCH=arm64
         export CROSS_COMPILE=aarch64-linux-gnu-
         export CC=aarch64-linux-gnu-gcc
+        export HOSTCC=gcc
+        export SHELL=/bin/bash
 
-        echo "Compiler version:"
+        echo "=== Build Environment ==="
+        echo "CC: $CC"
+        echo "CROSS_COMPILE: $CROSS_COMPILE"
+        echo "SHELL: $SHELL"
         $CC --version
-        echo "Shell check:"
         /bin/sh --version || true
 
-        make CC=$CC a32x_defconfig
+        # Generate defconfig with explicit variables
+        make SHELL=/bin/bash ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=aarch64-linux-gnu-gcc a32x_defconfig
 
         # Disable problematic configs
         sed -i 's/CONFIG_CC_STACKPROTECTOR_STRONG=y/# CONFIG_CC_STACKPROTECTOR_STRONG is not set/' .config
@@ -108,10 +124,13 @@ jobs:
         # Disable MediaTek devfreq (missing headers)
         sed -i 's/CONFIG_MTK_DVFSRC=y/# CONFIG_MTK_DVFSRC is not set/' .config
         sed -i 's/CONFIG_MTK_DVFSRC_HELPER=y/# CONFIG_MTK_DVFSRC_HELPER is not set/' .config
+        # Disable MediaTek extcon (missing headers)
+        sed -i 's/CONFIG_EXTCON_MTK_USB=y/# CONFIG_EXTCON_MTK_USB is not set/' .config
+        sed -i 's/CONFIG_TCPC_CLASS=y/# CONFIG_TCPC_CLASS is not set/' .config
 
-        # Disable -Werror to allow warnings without failing
-        make CC=$CC KCFLAGS="-w" EXTRA_CFLAGS="-Wno-error" -j$(nproc) Image 2>&1 | tee build.log || \
-        make CC=$CC KCFLAGS="-w" EXTRA_CFLAGS="-Wno-error" -j$(nproc) Image.gz 2>&1 | tee -a build.log
+        # Build with explicit SHELL and all variables passed directly
+        make SHELL=/bin/bash ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=aarch64-linux-gnu-gcc HOSTCC=gcc KCFLAGS="-w" -j$(nproc) Image 2>&1 | tee build.log || \
+        make SHELL=/bin/bash ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=aarch64-linux-gnu-gcc HOSTCC=gcc KCFLAGS="-w" -j$(nproc) Image.gz 2>&1 | tee -a build.log
 
     - name: Check build output
       run: |
