@@ -4,13 +4,13 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     steps:
     - name: Setup build environment
       run: |
         sudo apt-get update
-        sudo apt-get install -y git curl wget bc bison flex libssl-dev libelf-dev zip unzip python3 libncurses-dev
+        sudo apt-get install -y git curl wget bc bison flex libssl-dev libelf-dev zip unzip python3 libncurses-dev gcc-aarch64-linux-gnu
 
     - name: Clone kernel source
       run: |
@@ -22,31 +22,25 @@ jobs:
       run: |
         cd kernel
         curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
+
+        # Add KernelSU config and disable problematic options
         echo "CONFIG_KSU=y" >> arch/arm64/configs/a32x_defconfig
-
-    - name: Download Clang toolchain
-      run: |
-        mkdir -p toolchain
-        cd toolchain
-        git clone --depth=1 https://github.com/ZyCromerZ/Clang clang
-
-    - name: Download GCC toolchain
-      run: |
-        cd toolchain
-        git clone --depth=1 https://github.com/ZyCromerZ/aarch64-linux-android-4.9 gcc64
+        sed -i 's/CONFIG_CC_STACKPROTECTOR_STRONG=y/# CONFIG_CC_STACKPROTECTOR_STRONG is not set/' arch/arm64/configs/a32x_defconfig
+        sed -i 's/CONFIG_CC_STACKPROTECTOR=y/# CONFIG_CC_STACKPROTECTOR is not set/' arch/arm64/configs/a32x_defconfig
 
     - name: Build kernel
       run: |
         cd kernel
-        export PATH=$GITHUB_WORKSPACE/toolchain/clang/bin:$GITHUB_WORKSPACE/toolchain/gcc64/bin:$PATH
         export ARCH=arm64
         export SUBARCH=arm64
-        export CROSS_COMPILE=aarch64-linux-android-
-        export CC=clang
-        export CLANG_TRIPLE=aarch64-linux-gnu-
-        export ANDROID_MAJOR_VERSION=r
+        export CROSS_COMPILE=aarch64-linux-gnu-
 
         make a32x_defconfig
+
+        # Disable stack protector in .config too
+        sed -i 's/CONFIG_CC_STACKPROTECTOR_STRONG=y/# CONFIG_CC_STACKPROTECTOR_STRONG is not set/' .config
+        sed -i 's/CONFIG_CC_STACKPROTECTOR=y/# CONFIG_CC_STACKPROTECTOR is not set/' .config
+
         make -j$(nproc) Image 2>&1 || make -j$(nproc) Image.gz 2>&1
 
     - name: Check build output
