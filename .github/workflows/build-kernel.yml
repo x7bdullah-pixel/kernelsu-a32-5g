@@ -58,6 +58,10 @@ jobs:
         sed -i 's/CONFIG_CC_STACKPROTECTOR_STRONG=y/# CONFIG_CC_STACKPROTECTOR_STRONG is not set/' .config
         sed -i 's/CONFIG_CC_STACKPROTECTOR=y/# CONFIG_CC_STACKPROTECTOR is not set/' .config
 
+        # Fix Makefile: wrong flag syntax (hyphen vs equals)
+        sed -i 's/-Wno-error-implicit-function-declaration/-Wno-error=implicit-function-declaration/g' Makefile
+        find . -name "Makefile" -exec sed -i 's/-Wno-error-implicit-function-declaration/-Wno-error=implicit-function-declaration/g' {} \;
+
         # Disable -Werror in Makefile
         sed -i 's/-Werror/-Wno-error/g' Makefile
 
