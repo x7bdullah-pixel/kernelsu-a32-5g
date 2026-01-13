@@ -13,12 +13,8 @@ jobs:
     - name: Setup build environment
       run: |
         sudo apt-get update
-        sudo apt-get install -y git curl wget bc bison flex libssl-dev libelf-dev zip unzip python3 python-is-python3 libncurses-dev make cpio
+        sudo apt-get install -y git curl wget bc bison flex libssl-dev libelf-dev zip unzip python3 python-is-python3 libncurses-dev make cpio gcc-aarch64-linux-gnu g++-aarch64-linux-gnu gcc-10 g++-10
 
-        # Install cross compiler
-        sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu gcc-10 g++-10
-
-        # Fix /bin/sh to use bash
         sudo rm /bin/sh
         sudo ln -s /bin/bash /bin/sh
 
@@ -34,6 +30,22 @@ jobs:
         curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
         echo "CONFIG_KSU=y" >> arch/arm64/configs/a32x_defconfig
 
+    - name: Fix Makefiles for GCC 13
+      run: |
+        cd kernel
+
+        # Fix the invalid flag in ALL Makefiles BEFORE building
+        echo "Fixing -Wno-error-implicit-function-declaration flag..."
+        find . -type f -name "Makefile*" -exec sed -i 's/-Wno-error-implicit-function-declaration/-Wno-implicit-function-declaration/g' {} \;
+        find . -type f -name "Kbuild*" -exec sed -i 's/-Wno-error-implicit-function-declaration/-Wno-implicit-function-declaration/g' {} \;
+
+        # Also check Kconfig files
+        find . -type f -name "Kconfig*" -exec sed -i 's/-Wno-error-implicit-function-declaration/-Wno-implicit-function-declaration/g' {} \;
+
+        # Show where the flag exists
+        echo "Checking if flag still exists:"
+        grep -r "Wno-error-implicit-function-declaration" . 2>/dev/null | head -20 || echo "Flag not found (good!)"
+
     - name: Build kernel
       run: |
         cd kernel
@@ -44,8 +56,6 @@ jobs:
         export CC=aarch64-linux-gnu-gcc
         export HOSTCC=gcc-10
         export HOSTCXX=g++-10
-
-        # Disable ALL warnings-as-errors
         export KCFLAGS="-w"
         export EXTRA_CFLAGS="-w"
 
@@ -57,13 +67,6 @@ jobs:
         # Disable stack protector
         sed -i 's/CONFIG_CC_STACKPROTECTOR_STRONG=y/# CONFIG_CC_STACKPROTECTOR_STRONG is not set/' .config
         sed -i 's/CONFIG_CC_STACKPROTECTOR=y/# CONFIG_CC_STACKPROTECTOR is not set/' .config
-
-        # Fix Makefile: wrong flag syntax (hyphen vs equals)
-        sed -i 's/-Wno-error-implicit-function-declaration/-Wno-error=implicit-function-declaration/g' Makefile
-        find . -name "Makefile" -exec sed -i 's/-Wno-error-implicit-function-declaration/-Wno-error=implicit-function-declaration/g' {} \;
-
-        # Disable -Werror in Makefile
-        sed -i 's/-Werror/-Wno-error/g' Makefile
 
         make -j$(nproc) Image 2>&1 | tee build.log || make -j$(nproc) Image.gz 2>&1 | tee -a build.log
 
