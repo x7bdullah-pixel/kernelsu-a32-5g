@@ -28,11 +28,15 @@ jobs:
         git clone --depth=1 https://github.com/AmazingDef/android_kernel_samsung_a32x kernel || \
         git clone --depth=1 https://github.com/ASKSAP/android_kernel_samsung_a32x -b A326BXXU1AUA5 kernel
 
-    - name: Setup KernelSU
+    - name: Setup KernelSU (rsuntk fork for non-GKI)
       run: |
         cd kernel
-        curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
+        # Use rsuntk fork which supports non-GKI kernels (4.14)
+        curl -LSs "https://raw.githubusercontent.com/rsuntk/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
+
+        # Enable KernelSU with manual hook for non-GKI
         echo "CONFIG_KSU=y" >> arch/arm64/configs/a32x_defconfig
+        echo "CONFIG_KSU_MANUAL_HOOK=y" >> arch/arm64/configs/a32x_defconfig
 
     - name: Fix Makefiles and source for GCC 13
       run: |
@@ -82,6 +86,7 @@ jobs:
 
         # Disable MediaTek extcon (missing extcon_usb.h)
         sed -i '/mediatek/d' drivers/extcon/Makefile || true
+        sed -i '/mediatek/d' drivers/extcon/Kconfig || true
         rm -rf drivers/extcon/mediatek || true
 
         # Fix SDCARDFS_VERSION macro issue
