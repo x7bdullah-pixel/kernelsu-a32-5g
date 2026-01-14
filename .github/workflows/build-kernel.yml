@@ -89,6 +89,14 @@ jobs:
         sed -i '/mediatek/d' drivers/extcon/Kconfig || true
         rm -rf drivers/extcon/mediatek || true
 
+        # Fix MediaTek DRM trace header issue
+        # The trace header needs to be findable from include/trace/
+        if [ -f drivers/gpu/drm/mediatek/mtk_layer_layout_trace.h ]; then
+          cp drivers/gpu/drm/mediatek/mtk_layer_layout_trace.h include/trace/
+          # Fix the TRACE_INCLUDE_PATH in the original file
+          sed -i 's|#define TRACE_INCLUDE_PATH .*|#define TRACE_INCLUDE_PATH trace|g' drivers/gpu/drm/mediatek/mtk_layer_layout_trace.h
+        fi
+
         # Fix SDCARDFS_VERSION macro issue
         sed -i 's/SDCARDFS_VERSION/"2.0"/g' fs/sdcardfs/main.c || true
 
