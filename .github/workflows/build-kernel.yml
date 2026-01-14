@@ -47,43 +47,16 @@ jobs:
     - name: Build kernel
       run: |
         cd kernel
-
-        # Check if build.sh exists and use it, otherwise manual build
-        if [ -f build.sh ]; then
-          chmod +x build.sh
-          ./build.sh || true
-        fi
-
-        # If no Image produced, try manual build
-        if [ ! -f arch/arm64/boot/Image* ]; then
-          export ARCH=arm64
-          export CROSS_COMPILE=aarch64-linux-gnu-
-          export CC=aarch64-linux-gnu-gcc
-
-          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- a32x_defconfig || make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- defconfig
-          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=aarch64-linux-gnu-gcc -j$(nproc) Image.gz 2>&1 | tee build.log
-        fi
+        chmod +x build.sh
+        ./build.sh
 
     - name: Check build output
       run: |
+        ls -la kernel/output/ 2>/dev/null || echo "No output dir"
         ls -la kernel/arch/arm64/boot/ 2>/dev/null || echo "No boot dir"
-        tail -100 kernel/build.log 2>/dev/null || echo "No log"
-
-    - name: Package kernel
-      run: |
-        mkdir -p out
-        if [ -f kernel/arch/arm64/boot/Image ]; then
-          cp kernel/arch/arm64/boot/Image out/
-        elif [ -f kernel/arch/arm64/boot/Image.gz ]; then
-          cp kernel/arch/arm64/boot/Image.gz out/
-        else
-          echo "ERROR: No kernel image!"
-          exit 1
-        fi
-        cd out && zip -r KernelSU-A32-5G-kernel.zip * && ls -la
 
     - name: Upload kernel
       uses: actions/upload-artifact@v4
       with:
         name: KernelSU-A32-5G-kernel
-        path: out/KernelSU-A32-5G-kernel.zip
+        path: kernel/output/*.zip
